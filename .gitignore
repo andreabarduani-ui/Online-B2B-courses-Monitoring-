@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+Monitoring_Report_*.xlsx
+logo_left.png
+logo_right.png

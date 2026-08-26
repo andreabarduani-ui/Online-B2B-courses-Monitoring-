@@ -1,0 +1,4 @@
+pandas
+openpyxl
+# optional, only needed to read attendance registers in PDF format:
+pdfplumber
