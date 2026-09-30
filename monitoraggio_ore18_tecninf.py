@@ -644,17 +644,14 @@ def scrivi_dettaglio(wb, sheet_name, titolo_breve, percorso_csv, corsi_attese,
 # ---------------------------------------------------------------- riepilogo
 
 def scrivi_riepilogo(wb, discenti, fogli_mesi, eff_corso):
+    # Stesse colonne del template (nessuna colonna mensile intermedia):
+    # D=Totale Ore Maturate, E=Ore Tolte, F=% copertura, G=Corsi da finire,
+    # H=Quota 80%, I=Contributivo, J=Finanziamento, K=nascosta (budget).
     COL_N, COL_CF, COL_P = 1, 2, 3
-    COL_MINI = 4
-    n_mesi = len(fogli_mesi)
-    C_TOT = COL_MINI + n_mesi
-    C_TOL = C_TOT + 1
-    C_COP = C_TOL + 1
-    C_CORSI = C_COP + 1
-    C_Q80 = C_CORSI + 1
-    C_CONTR = C_Q80 + 1
-    C_FIN = C_CONTR + 1
-    C_HID = C_FIN + 1
+    C_TOT, C_TOL, C_COP, C_CORSI = 4, 5, 6, 7
+    C_Q80, C_CONTR, C_FIN, C_HID = 8, 9, 10, 11
+    # Budget totale approvato (cella nascosta K34 nel template).
+    BUDGET_TOTALE = 70242.3
     R_TIT, R_HEAD, R_DAT = 1, 2, 3
     N = len(discenti)
     R_TOT = R_DAT + N
@@ -727,7 +724,7 @@ def scrivi_riepilogo(wb, discenti, fogli_mesi, eff_corso):
     ws.column_dimensions[get_column_letter(C_Q80)].width = 14
     ws.column_dimensions[get_column_letter(C_CONTR)].width = 13
     ws.column_dimensions[get_column_letter(C_FIN)].width = 13
-    ws.column_dimensions[get_column_letter(C_HID)].width = 0
+    ws.column_dimensions[get_column_letter(C_HID)].width = 0.0
     ws.column_dimensions[get_column_letter(C_HID)].hidden = True
 
     # mappa percorso -> lista corsi dettaglio (canonici)
@@ -745,22 +742,17 @@ def scrivi_riepilogo(wb, discenti, fogli_mesi, eff_corso):
         ws.cell(r, COL_CF).alignment = c_centro
         ws.cell(r, COL_P, value=info["percorso"]).font = font_base
         ws.cell(r, COL_P).alignment = c_sin
+        # Riferimenti diretti come nel template: i fogli mese hanno gli stessi
+        # discenti nello stesso ordine ma i dati partono da riga 4 (riga 2 vuota),
+        # quindi la riga mese e' r+1 rispetto al Riepilogo.
         parti_tot, parti_tol = [], []
         for f in fogli_mesi:
             sname = f["sheet"].replace("'", "''")
             leff = get_column_letter(f["col_eff"])
             lexc = get_column_letter(f["col_exc"])
-            nrig = f.get("n", 200)
-            # cerca la riga del CF nel foglio mese via MATCH sulla col B
-            parti_tot.append(
-                f"IFERROR(INDEX('{sname}'!{leff}{4}:{leff}{4 + nrig},"
-                f"MATCH(\"{cf}\",'{sname}'!B{4}:B{4 + nrig},0)),0)")
-            parti_tol.append(
-                f"IFERROR(INDEX('{sname}'!{lexc}{4}:{lexc}{4 + nrig},"
-                f"MATCH(\"{cf}\",'{sname}'!B{4}:B{4 + nrig},0)),0)")
-        # Per struttura identica al template (riferimenti diretti di riga quando
-        # l'ordinamento coincide) usiamo comunque MATCH (robusto); il risultato
-        # numerico e' identico al CSV.
+            rm = r + 1
+            parti_tot.append(f"'{sname}'!{leff}{rm}")
+            parti_tol.append(f"'{sname}'!{lexc}{rm}")
         ws.cell(r, C_TOT, value="=" + "+".join(parti_tot)).number_format = DURATION_FORMAT
         ws.cell(r, C_TOT).font = font_base
         ws.cell(r, C_TOT).alignment = c_centro
@@ -806,9 +798,16 @@ def scrivi_riepilogo(wb, discenti, fogli_mesi, eff_corso):
     ws.cell(R_TOT, COL_N, value="TOTALE").font = Font(name="Arial", bold=True, size=10)
     ws.cell(R_TOT, C_TOT, value=f"=SUM({l_tot}{R_DAT}:{l_tot}{R_TOT - 1})").number_format = DURATION_FORMAT
     ws.cell(R_TOT, C_TOL, value=f"=SUM({get_column_letter(C_TOL)}{R_DAT}:{get_column_letter(C_TOL)}{R_TOT - 1})").number_format = DURATION_FORMAT
-    ws.cell(R_TOT, C_FIN, value=f"=SUM({get_column_letter(C_FIN)}{R_DAT}:{get_column_letter(C_FIN)}{R_TOT - 1})").number_format = '#,##0.00" \u20ac"'
+    l_fin = get_column_letter(C_FIN)
+    ws.cell(R_TOT, C_FIN, value=f"=SUM({l_fin}{R_DAT}:{l_fin}{R_TOT - 1})").number_format = '#,##0.00" \u20ac"'
+    # Come nel template: budget approvato in colonna nascosta K sulla penultima
+    # riga dati, e TOTALE NON FINANZIATO = budget - finanziato.
+    l_hid = get_column_letter(C_HID)
+    ws.cell(R_TOT - 2, C_HID, value=BUDGET_TOTALE)
     ws.row_dimensions[R_NONFIN].height = 20.1
     ws.cell(R_NONFIN, COL_N, value="TOTALE NON FINANZIATO").font = Font(name="Arial", bold=True, size=10)
+    ws.cell(R_NONFIN, C_FIN, value=f"={l_hid}{R_TOT - 2}-{l_fin}{R_TOT}")
+    ws.cell(R_NONFIN, C_FIN).number_format = '#,##0.00" \u20ac"'
     ws.freeze_panes = "D7"
 
 
